@@ -31,20 +31,28 @@ sub croak {
 
 sub new {
   $PARAMS = {
-      _FEATURES_PATH => undef
-    , _STEPS_PATH    => undef
+      _FEATURES_PATH      => undef
+    , _FEATURE_FILES_REF  => undef
+    , _STEPS_PATH         => undef
   };
   return bless {};
 }
 
+#########
+# Main  #
+#########
 sub run {
   my $self  = Cougar->new;
   print_version;
   
   $self->hash_params(\@ARGV);
   $self->review_params;
+  $self->run_features;
 }
 
+#################
+# SETUP SECTION #
+#################
 sub review_params {
   my $self  = shift;
   print "Running with the following paths:\n";
@@ -94,13 +102,71 @@ sub _param {
 sub features {
   my $self  = shift;
   my $path  = shift;
-  return $self->_param( '_FEATURES_PATH', $path, './features' )
+  return $self->_param( '_FEATURES_PATH', $path, './features' );
+}
+
+sub feature_files {
+  my $self      = shift;
+  my $file_ref  = shift;
+  return $self->_param( '_FEATURE_FILES_REF', $file_ref, undef);
 }
 
 sub steps {
   my $self  = shift;
   my $path  = shift;
-  return $self->_param( '_STEPS_PATH', $path, $self->features.'/steps' )
+  return $self->_param( '_STEPS_PATH', $path, $self->features.'/steps' );
 }
 
 
+#######################
+# Handle the features #
+#######################
+sub run_features {
+  my $self  = shift;
+  my $files_ref = $self->collect_feature_files;
+}
+
+sub collect_feature_files {
+  my $self    = shift;
+  my $files   = $self->list_features;
+  
+  my @features;
+  foreach (@$files) {
+    my $prep = $self->clean_and_prepend_feature($_);
+    push(@features, $prep) if $self->is_feature_file($prep);
+  }
+  return $self->feature_files(\@features);
+}
+
+sub list_features {
+  my $self  = shift;
+  my $path  = $self->features;
+  my @files = `ls $path`;
+  return \@files;
+}
+
+sub is_feature_file {
+  my $self  = shift;
+  my $file  = shift;
+  return $file =~ m/^.*\.feature$/;
+}
+
+sub clean_and_prepend_feature {
+  my $self  = shift;
+  my $file  = shift;
+  $file = $self->clean_filename($file);
+  return $self->prepend_features($file);
+}
+
+sub clean_filename {
+  my $self  = shift;
+  my $file  = shift;
+  $file =~ m/^\s*(\S+)\s*$/;
+  return $1;
+}
+
+sub prepend_features {
+  my $self  = shift;
+  my $file  = shift;
+  return $self->features."/$file";
+}
