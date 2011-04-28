@@ -4,14 +4,8 @@ use Test::More;
 ###########
 # Helpers #
 ###########
-use vars qw( $TMPDIR );
-$TMPDIR = './tmp';
-sub cleanup {
-  `rm -rf $TMPDIR`;
-  
-  1;
-}
-
+use vars qw( $FIXTURES );
+$FIXTURES  = './fixtures';
 
 ###################
 # Testing Begins  #
@@ -67,17 +61,14 @@ subtest "Set feature parameter from command line", sub {
 
 subtest "Feature file collection helper methods", sub {
   my $feature = "one.feature";
-  my $ignore  = "one.ignore";
+  my $ignore  = "ignore.faux";
   my $class = Cougar->new;
-  $class->features($TMPDIR);
+  $class->features($FIXTURES);
   
   subtest "'list_features': gets file names from supplied features dir", sub {
-    `mkdir -p $TMPDIR`;
-    map { `touch $_` } ( "$TMPDIR/$feature", "$TMPDIR/$ignore");
-    
     my $features = $class->list_features;
-    is( @$features[0], "$feature\n" );
-    is( @$features[1], "$ignore\n" );
+    is( @$features[0], "$ignore\n" );
+    is( @$features[1], "$feature\n" );
   };
   
   my $actual;
@@ -86,34 +77,29 @@ subtest "Feature file collection helper methods", sub {
   is( $actual = $class->is_feature_file($ignore), ''
   , "'is_feature_file': false('$actual') with file '$ignore'");
   
-  is( $actual = $class->clean_filename(" $feature "), $feature
-  , "'clean_filename': removed whitespaces fore and aft of text - '$actual'");
-  is( $actual = $class->clean_filename("$feature\n"), $feature
-  , "'clean_filename': removed newline aft of text - '$actual'");
-  is( $actual = $class->clean_filename($feature), $feature
-  , "'clean_filename': returns text if already clean - '$actual'");
+  is( $actual = $class->trim(" $feature "), $feature
+  , "'trim': removed whitespaces fore and aft of text - '$actual'");
+  is( $actual = $class->trim("$feature\n"), $feature
+  , "'trim': removed newline aft of text - '$actual'");
+  is( $actual = $class->trim($feature), $feature
+  , "'trim': returns text if already clean - '$actual'");
   
-  is( $actual = $class->prepend_features($feature), "$TMPDIR/$feature"
+  is( $actual = $class->prepend_features($feature), "$FIXTURES/$feature"
   , "'prepend_features': adds features dir to each filename - '$actual'");
-  
-  cleanup;
 };
 
 subtest "Collect feature files", sub {
-  my @files = ("one.feature", "one.ignore");
-  `mkdir -p $TMPDIR`;
-  foreach (@files) {
-    my $tmp = "$TMPDIR/$_";
-    `touch $tmp`;
-  }
-  
   my $class = Cougar->new;
-  $class->features($TMPDIR);
+  $class->features($FIXTURES);
+  
   my $features = $class->collect_feature_files;
-  is( @$features[0], "$TMPDIR/one.feature"
+  is( @$features[0], "$FIXTURES/one.feature"
   , "Collected only files with '.feature' extension");
-  cleanup;
 };
 
-cleanup;
 done_testing();
+
+print "\n\nRunning a functional test.\n";
+my $class = Cougar->new;
+$class->features($FIXTURES);
+$class->run_features;

@@ -66,8 +66,7 @@ subtest "Test for scenario block", sub {
 subtest "Read a feature file", sub {
   my $class = Cougar::Feature->new;
   $class->open_feature($FEATURE);
-  $class->read_feature;
-  
+  $class->read_feature; 
   
   my $headline = <<HEADLINE;
 Feature: Run cucumber in Perl
@@ -77,6 +76,30 @@ Feature: Run cucumber in Perl
 HEADLINE
   is( $class->publish_feature, $headline
   , "Read in the feature description from the file." );
+  
+};
+
+subtest "Manipulating Scenarios in a Feature", sub {
+  my $class = Cougar::Feature->new;
+  
+  is($class->scenario, undef,
+    "Returns the default if no scenario.");
+  my $first = Cougar::Scenario->new;
+  $first->headline("New Headline");
+  $class->scenario($first);
+  is($class->scenario->headline, "New Headline",
+    "Can retrieve the current scenario.");
+  
+  isa_ok($class->new_scenario, Cougar::Scenario,
+    "Feature can create new Scenario object.");
+  is($class->new_scenario->headline, undef,
+    "Returned scenario has no headline");
+    
+  my $scenario = $class->new_scenario("Newest Headline");
+  isa_ok($scenario, Cougar::Scenario,
+    "Sent a headline with the creation of a scenario.");
+  is($scenario->headline, "Newest Headline",
+    "The returned scenario has the headline designated.");
   
 };
 

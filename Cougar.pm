@@ -123,9 +123,9 @@ sub steps {
 ##################
 sub run_features {
   my $self  = shift;
-  $self->collect_feature_files;
-  foreach (@$self->feature_files) {
-    my $feature = Feature->new;
+  my $files = $self->collect_feature_files;
+  foreach (@$files) {
+    my $feature = Cougar::Feature->new;
     $feature->feature_file($_);
     $feature->open_feature;
     $feature->read_feature;
@@ -161,15 +161,16 @@ sub is_feature_file {
 sub clean_and_prepend_feature {
   my $self  = shift;
   my $file  = shift;
-  $file = $self->clean_filename($file);
+  $file = $self->trim($file);
   return $self->prepend_features($file);
 }
 
-sub clean_filename {
+sub trim {
   my $self  = shift;
-  my $file  = shift;
-  $file =~ m/^\s*(\S+)\s*$/;
-  return $1;
+  my $line  = shift;
+  $line =~ s/^\s+//;
+  $line =~ s/\s+$//;
+  return $line;
 }
 
 sub prepend_features {
@@ -178,29 +179,34 @@ sub prepend_features {
   return $self->features."/$file";
 }
 
-
+###############################################################################
 package Cougar::Feature;
 
-use vars qw( $PARAMS $SCENARIO );
+use vars qw( $PARAMS );
 
 sub new {
+  my @array = ();
   $PARAMS = {
       _FILE           => undef
     , _FH             => undef
     , _FH_ACCESSIBLE  => undef
-    , _ACTIVE         => undef
-    , _HEADER         => {
-      _TEXT => undef
-    }
+    , _FEATURE        => undef
+    , _SCENARIO       => undef
+    , _SCENARIOS      => \@array
   };
   return bless {};
+}
+
+sub trim_end {
+  my $line = shift;
+  $line =~ s/\s+$//;
+  return $line;
 }
 
 sub trim {
   my $line  = shift;
   $line =~ s/^\s+//;
-  $line =~ s/\s+$//;
-  return $line;
+  return trim_end($line);
 }
 sub _param {
   my $self    = shift;
@@ -248,19 +254,21 @@ sub read_feature {
   my $fh = $self->feature_file_handle;
   my $section;
   while( <$fh> ) {
-    my $line = trim($_);
+    my $line = trim_end($_);
     next if ($line eq '');
     
     if( $self->is_feature($line) ) {
-      $section = 'push_feature';
+      $section = 'feature';
     }
     
     if( $self->is_scenario($line) ) {
-      $section = 'push_scenario'
+      $self->new_scenario($line);
+      $section = 'scenario';
+      next;
     }
     
-    next if $section eq 'push_scenario';
-    $self->$section($line);
+    my $action = "append_$section";
+    $self->$action($line);
   }
   return $PARAMS;
 }
@@ -277,16 +285,114 @@ sub is_scenario {
   return ($line =~ m/^\s*Scenario:.*$/i) ? 'scenario' : undef;
 }
 
-sub publish_feature {
-  my $self  = shift;
-  return $PARAMS->{_HEADER}->{_TEXT};
-}
-
-sub push_feature {
+sub append_feature {
   my $self  = shift;
   my $line  = shift;
   $line = "$line\n";
   
-  return $PARAMS->{_HEADER}->{_TEXT} = $line unless defined $PARAMS->{_HEADER}->{_TEXT};
-  return $PARAMS->{_HEADER}->{_TEXT} .= "  $line";
+  return $PARAMS->{_FEATURE} = $line unless defined $PARAMS->{_FEATURE};
+  return $PARAMS->{_FEATURE} .= $line;
+}
+
+sub publish_feature {
+  my $self  = shift;
+  return $PARAMS->{_FEATURE};
+}
+
+sub new_scenario {
+  my $self     = shift;
+  my $headline = shift;
+  
+  $self->push_scenario if defined $self->scenario;
+  
+  my $scenario = Cougar::Scenario->new;
+  $scenario->headline($headline);
+  return $self->scenario($scenario);
+}
+
+sub scenario {
+  my $self     = shift;
+  my $scenario = shift;
+  return $self->_param("_SCENARIO", $scenario, undef);
+}
+
+sub scenarios {
+  my $self = shift;
+  return $PARAMS->{_SCENARIOS};
+}
+
+sub push_scenario {
+  my $self = shift;
+  my $scenarios = $self->scenarios;
+  return push(@$scenarios, $self->scenario);
+}
+
+sub append_scenario {
+  my $self = shift;
+  my $line = shift;
+  
+  return $self->scenario->add_step($line);
+}
+
+sub run {
+  my $self = shift;
+  print $self->publish_feature;
+  my $scenarios = $self->scenarios;
+  foreach my $scenario (@$scenarios) {
+    print $scenario->headline;
+  }
+  
+}
+
+###############################################################################
+package Cougar::Scenario;
+
+use vars qw( $PARAMS );
+
+sub new {
+  my @array = ();
+  $PARAMS = {
+      _HEADLINE => undef,
+      _STEPS    => \@array
+  };
+  return bless {};
+}
+
+sub _param {
+  my $self    = shift;
+  my $param   = shift;
+  my $value   = shift;
+  my $default = shift;
+  
+  $PARAMS->{$param} = $value if defined $value;
+  return $PARAMS->{$param} if defined $PARAMS->{$param};
+  return $PARAMS->{$param} = ( (defined $value) ? $value : $default );
+}
+
+sub headline {
+  my $self     = shift;
+  my $headline = shift;
+  return $self->_param('_HEADLINE', $headline, undef);
+}
+
+sub steps {
+  my $self  = shift;
+  return $PARAMS->{_STEPS};
+}
+
+sub add_step {
+  my $self = shift;
+  my $step = shift;
+  my $array = $self->steps;
+  return push(@$array, $step);
+}
+
+sub publish_scenario {
+  my $self = shift;
+  my $text = $self->headline."\n";
+  my $steps = $self->steps;
+  foreach (@$steps) {
+    $text .= "$_\n";
+  }
+  return $text;
 }
